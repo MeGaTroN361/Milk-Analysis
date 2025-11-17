@@ -1,0 +1,213 @@
+{% extends "layout.html" %}
+{% block title %}Listen & Add – Cow {{ cow.tag_id }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">
+      Listen & Confirm – <span class="text-primary">Cow {{ cow.tag_id }}</span>
+    </h3>
+    <a
+      class="btn btn-outline-secondary"
+      href="{{ request.args.get('next') or url_for('cow_dashboard', cow_id=cow.id) }}"
+      >Back</a
+    >
+  </div>
+
+  <!-- Status / actions -->
+  <div id="statusBox" class="alert alert-info">
+    <div><strong>Status:</strong> <span id="statusText">Checking device…</span></div>
+    <div class="small text-muted" id="subStatus"></div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <button class="btn btn-primary" id="btnVitals">Listen Vitals</button>
+    <button class="btn btn-success" id="btnMilk">Listen Milk</button>
+    <button class="btn btn-outline-secondary" id="btnRetry" hidden>Retry</button>
+    <a
+      class="btn btn-outline-primary"
+      href="{{ url_for('connect', cow_id=cow.id, next=request.args.get('next') or url_for('cow_dashboard', cow_id=cow.id)) }}"
+    >
+      Reconnect Device
+    </a>
+  </div>
+
+  <!-- Editable form (only saved when user confirms) -->
+  <form id="confirmForm" method="post" action="{{ url_for('records_save', cow_id=cow.id) }}">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">Temperature (°C)</label>
+        <input type="number" step="0.01" class="form-control" name="temperature" id="f_temperature" placeholder="e.g. 37.5" />
+        <div class="form-text">Ideal: {{ ideal.temperature.min }}–{{ ideal.temperature.max }}</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Heart rate (bpm)</label>
+        <input type="number" step="1" class="form-control" name="heart_rate" id="f_heart_rate" placeholder="e.g. 72" />
+        <div class="form-text">Ideal: {{ ideal.heart_rate.min }}–{{ ideal.heart_rate.max }}</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">pH</label>
+        <input type="number" step="0.01" class="form-control" name="ph" id="f_ph" placeholder="e.g. 6.8" />
+        <div class="form-text">Ideal: {{ ideal.ph.min }}–{{ ideal.ph.max }}</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Turbidity (NTU)</label>
+        <input type="number" step="0.01" class="form-control" name="turbidity" id="f_turbidity" placeholder="e.g. 0.45" />
+        <div class="form-text">Ideal: {{ ideal.turbidity.min }}–{{ ideal.turbidity.max }}</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Conductivity (mS/cm)</label>
+        <input type="number" step="0.01" class="form-control" name="conductivity" id="f_conductivity" placeholder="e.g. 4.9" />
+        <div class="form-text">Ideal: {{ ideal.conductivity.min }}–{{ ideal.conductivity.max }}</div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Fat (%)</label>
+        <input type="number" step="0.01" class="form-control" name="fat_content" id="f_fat" placeholder="optional" />
+      </div>
+    </div>
+
+    <input type="hidden" name="cow_id" value="{{ cow.id }}" />
+    <input type="hidden" name="source" value="device_confirmed" />
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-success">Confirm & Save</button>
+      <a class="btn btn-outline-secondary" href="{{ request.args.get('next') or url_for('cow_dashboard', cow_id=cow.id) }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  // ---------- endpoints ----------
+  const cowId = {{ cow.id }};
+  const urlReady   = `/device/ready/${cowId}`;
+  const urlEnqV    = `/device/enqueue/vitals/${cowId}`;
+  const urlEnqM    = `/device/enqueue/milk/${cowId}`;
+  const urlStatus  = `/check_listen_status?cow_id=${cowId}`;
+  const urlPending = `/device/pending/${cowId}`;
+
+  // ---------- UI ----------
+  const statusBox  = document.getElementById('statusBox');
+  const statusText = document.getElementById('statusText');
+  const subStatus  = document.getElementById('subStatus');
+  const btnVitals  = document.getElementById('btnVitals');
+  const btnMilk    = document.getElementById('btnMilk');
+  const btnRetry   = document.getElementById('btnRetry');
+
+  const f = {
+    temperature:  document.getElementById('f_temperature'),
+    heart_rate:   document.getElementById('f_heart_rate'),
+    ph:           document.getElementById('f_ph'),
+    turbidity:    document.getElementById('f_turbidity'),
+    conductivity: document.getElementById('f_conductivity'),
+    fat:          document.getElementById('f_fat'),
+  };
+
+  function setStatus(main, sub = '', level = 'info') {
+    statusBox.className = `alert alert-${level}`;
+    statusText.textContent = main;
+    subStatus.textContent = sub;
+  }
+  function enableButtons(v = true) {
+    btnVitals.disabled = !v;
+    btnMilk.disabled = !v;
+  }
+
+  async function jget(u) {
+    const r = await fetch(u, { credentials: 'include' });
+    if (!r.ok) throw new Error(`${u}: ${r.status}`);
+    return r.json();
+  }
+  async function jpost(u) {
+    const r = await fetch(u, { method: 'POST', credentials: 'include', headers: { 'X-Requested-With': 'fetch' } });
+    if (!r.ok) throw new Error(`${u}: ${r.status}`);
+    return r.json();
+  }
+
+  async function checkReady() {
+    setStatus('Checking device…', '/device/ready');
+    try {
+      const js = await jget(urlReady);
+      if (js && js.ready) {
+        setStatus('Device ready', 'Shared mode OK', 'success');
+        return true;
+      }
+      setStatus('Device not ready', 'Reconnect the device.', 'warning');
+      btnRetry.hidden = false;
+      return false;
+    } catch (e) {
+      setStatus('Device check failed', String(e), 'danger');
+      btnRetry.hidden = false;
+      return false;
+    }
+  }
+
+  async function enqueueAndWait(which) {
+    // which: 'vitals' | 'milk'
+    const enqUrl = (which === 'vitals') ? urlEnqV : urlEnqM;
+    setStatus(`Requesting ${which}…`, enqUrl);
+    enableButtons(false);
+    try { await jpost(enqUrl); } catch (e) {
+      setStatus(`Failed to enqueue ${which}`, String(e), 'danger');
+      enableButtons(true);
+      btnRetry.hidden = false;
+      return;
+    }
+    setStatus(`Listening for ${which}…`, 'Waiting for device upload…');
+
+    const start = Date.now();
+    let gotSomething = false;
+    while (Date.now() - start < 120000) {
+      await new Promise(r => setTimeout(r, 1500));
+      try {
+        // 1) status for THIS cow
+        const js = await jget(urlStatus); // {cow_id,status,vitals,milk}
+        if (js && js.status === 'listening') {
+          subStatus.textContent = `Listening… vitals=${js.vitals ? '✓' : '…'} milk=${js.milk ? '✓' : '…'}`;
+        }
+
+        // 2) pull pending buffer and fill immediately
+        const data = await jget(urlPending);
+        if (which === 'vitals') {
+          if (Number.isFinite(+data.temperature)) { f.temperature.value = data.temperature; gotSomething = true; }
+          if (Number.isFinite(+data.heart_rate))  { f.heart_rate.value  = data.heart_rate;  gotSomething = true; }
+        } else {
+          if (Number.isFinite(+data.ph))           { f.ph.value           = data.ph;           gotSomething = true; }
+          if (Number.isFinite(+data.turbidity))    { f.turbidity.value    = data.turbidity;    gotSomething = true; }
+          if (Number.isFinite(+data.conductivity)) { f.conductivity.value = data.conductivity; gotSomething = true; }
+          if (Number.isFinite(+data.fat_content))  { f.fat.value          = data.fat_content;  gotSomething = true; }
+          else if (Number.isFinite(+data.predicted_fat)) { f.fat.value = data.predicted_fat;   gotSomething = true; }
+        }
+
+        // break as soon as we’ve filled something relevant for this mode
+        if (gotSomething) break;
+
+        // also allow fast-exit when server marks the mode complete
+        if ((which === 'vitals' && js && js.vitals) || (which === 'milk' && js && js.milk)) break;
+
+      } catch (e) {
+        // ignore a transient fetch error and keep polling until timeout
+      }
+    }
+    setStatus(gotSomething ? `Received ${which}` : `No ${which} received`, 'You can edit and then Confirm & Save.', gotSomething ? 'success' : 'warning');
+    enableButtons(true);
+  } // <-- FIX: properly close enqueueAndWait
+
+  // Attach listeners (these were previously stranded due to the missing brace)
+  btnVitals.addEventListener('click', async () => {
+    if (!(await checkReady())) return;
+    enqueueAndWait('vitals');
+  });
+  btnMilk.addEventListener('click', async () => {
+    if (!(await checkReady())) return;
+    enqueueAndWait('milk');
+  });
+  btnRetry.addEventListener('click', async () => {
+    btnRetry.hidden = true;
+    checkReady();
+  });
+
+  // initial ready check
+  checkReady();
+})(); // <-- FIX: close IIFE
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Cow Health Dashboard{% endblock %}</title>
+
+    <!-- Bootstrap 5 -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        background-image:
+      url("{{ url_for('static', filename='images/bg.jpg') }}"),
+      linear-gradient(135deg, #ff9a9e 0%, #fad0c4 40%, #fbc2eb 60%, #a18cd1 100%);
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center;
+        color: #222;
+        padding-top: 56px; /* space for fixed navbar */
+      }
+
+      /* Add a white blur background behind the main card (so text stays readable) */
+      .main-card .card {
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(6px);
+      }
+
+      .cow-link {
+        font-weight: 600;
+        color: #0d6efd;
+        text-decoration: none;
+      }
+      .cow-link:hover {
+        text-decoration: underline;
+      }
+      .list-group-item {
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+      .small-btn {
+        padding: 6px 10px;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-dark bg-dark fixed-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('index') }}"
+          >Cow Health Dashboard</a
+        >
+
+        <div class="d-flex align-items-center">
+          {% if session.get("logged_in") %}
+          <span class="text-white me-3">👤 {{ session.get("username") }}</span>
+          <a class="btn btn-outline-light btn-sm" href="{{ url_for('logout') }}"
+            >Logout</a
+          >
+          {% else %}
+          <a
+            class="btn btn-outline-light btn-sm me-2"
+            href="{{ url_for('register') }}"
+            >Register</a
+          >
+          <a class="btn btn-outline-light btn-sm" href="{{ url_for('login') }}"
+            >Login</a
+          >
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    <main class="container main-card">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% with messages = get_flashed_messages() %} {% if messages %}
+          <div class="mb-3">
+            {% for m in messages %}
+            <div class="alert alert-info">{{ m }}</div>
+            {% endfor %}
+          </div>
+          {% endif %} {% endwith %} {% block content %}{% endblock %}
+        </div>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block title %}Listening{% endblock %}
+{% block content %}
+<div class="container">
+  <h3 id="title">Listening — {{ mode }}</h3>
+  <div id="status" class="alert alert-info">Waiting for device...</div>
+  <div class="mt-3">
+    <button id="btnCancel" class="btn btn-danger">Cancel</button>
+  </div>
+</div>
+
+<script>
+const checkUrl = "{{ url_for('check_listen_status') }}";
+const cancelUrl = "{{ url_for('cancel_listen') }}";
+const nextUrl = "{{ next_url }}";
+
+async function parseJsonSafe(res) {
+  const txt = await res.text();
+  try { return JSON.parse(txt); }
+  catch(e) { return { __raw_text: txt, status: res.status }; }
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch(checkUrl, { credentials: 'same-origin' });
+    const j = await parseJsonSafe(r);
+    if (r.ok && j.status === 'success') {
+      window.location.href = j.redirect || nextUrl;
+      return;
+    }
+    // keep waiting
+    setTimeout(pollStatus, 1200);
+  } catch (e) {
+    console.error('poll error', e);
+    document.getElementById('status').className = 'alert alert-danger';
+    document.getElementById('status').textContent = 'Error while waiting. Check connection.';
+  }
+}
+
+document.getElementById('btnCancel').addEventListener('click', async () => {
+  try {
+    const r = await fetch(cancelUrl, { method: 'POST', credentials: 'same-origin' });
+    if (r.ok) window.location.href = nextUrl;
+    else alert('Cancel failed');
+  } catch (e) {
+    console.error(e);
+    alert('Network error');
+  }
+});
+
+// start polling
+pollStatus();
+</script>
+{% endblock %}

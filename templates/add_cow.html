@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}Add Cow{% endblock %}
+{% block content %}
+  <h3>Add a New Cow</h3>
+  <form action="{{ url_for('add_cow') }}" method="post">
+    <div class="mb-3">
+      <label class="form-label">Cow Tag ID</label>
+      <input type="text" id="tag_id" name="tag_id" class="form-control" required placeholder="e.g., cow1">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Age</label>
+      <input type="number" id="age" name="age" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Breed (optional)</label>
+      <input type="text" id="breed" name="breed" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">Add Cow</button>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary ms-2">Cancel</a>
+  </form>
+{% endblock %}

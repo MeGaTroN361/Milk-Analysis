@@ -1,0 +1,617 @@
+{% extends "layout.html" %} {% block title %}Cow {{ cow.tag_id }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">
+      Cow <span class="text-primary">{{ cow.tag_id }}</span>
+      {% if status %}
+      <span
+        class="badge {% if status == 'healthy' %}bg-success {% elif status == 'warning' %}bg-warning text-dark {% else %}bg-danger{% endif %} ms-2"
+      >
+        {{ status|capitalize }}
+      </span>
+      {% endif %}
+    </h2>
+    <a
+      href="{{ request.referrer or url_for('index') }}"
+      class="btn btn-outline-secondary"
+      >Back to Herd</a
+    >
+  </div>
+
+  <div class="row g-3">
+    <!-- Latest readings -->
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Latest Readings</h5>
+          {% if latest and latest.timestamp %}
+          <div class="text-muted small mb-2">As of: {{ latest.timestamp }}</div>
+          {% endif %} {% set l = latest or {} %}
+          <div class="row row-cols-2 row-cols-md-3 g-3">
+            <div class="col">
+              <div class="p-2 border rounded">
+                Temperature<br />
+                <strong
+                  >{{ l.temperature if l.temperature is not none else '—' }}
+                  °C</strong
+                >
+              </div>
+            </div>
+            <div class="col">
+              <div class="p-2 border rounded">
+                Heart Rate<br />
+                <strong
+                  >{{ l.heart_rate if l.heart_rate is not none else '—' }}
+                  bpm</strong
+                >
+              </div>
+            </div>
+            <div class="col">
+              <div class="p-2 border rounded">
+                pH<br />
+                <strong>{{ l.ph if l.ph is not none else '—' }}</strong>
+              </div>
+            </div>
+            <div class="col">
+              <div class="p-2 border rounded">
+                Turbidity<br />
+                <strong
+                  >{{ l.turbidity if l.turbidity is not none else '—' }}
+                  NTU</strong
+                >
+              </div>
+            </div>
+            <div class="col">
+              <div class="p-2 border rounded">
+                Conductivity<br />
+                <strong
+                  >{{ l.conductivity if l.conductivity is not none else '—' }}
+                  mS/cm</strong
+                >
+              </div>
+            </div>
+            <div class="col">
+              <div class="p-2 border rounded">
+                Fat (pred.)<br />
+                <strong>
+                  {% if l.predicted_fat is not none %}{{
+                  '%.2f'|format(l.predicted_fat) }} % {% elif l.fat_content is
+                  not none %}{{ '%.2f'|format(l.fat_content) }} % {% else %}—{%
+                  endif %}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <a
+              href="{{ url_for('connect', cow_id=cow.id, next=url_for('cow_dashboard', cow_id=cow.id)) }}"
+              class="btn btn-primary"
+              >Listen</a
+            >
+
+            <a
+              class="btn btn-outline-secondary ms-2"
+              href="{{ url_for('export_cow_csv', cow_id=cow.id) }}"
+              >Export CSV</a
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Health -->
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">
+            {{ (disease_info.title if disease_info else 'Health') }}
+          </h5>
+          <p class="mb-2">
+            {{ (disease_info.description if disease_info and
+            disease_info.description) or 'No description available.' }}
+          </p>
+          <div class="small text-muted">
+            {{ (disease_info.advice if disease_info and disease_info.advice) or
+            'Review trends and consult a veterinarian if concerned.' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent data: Toggle (Table / Graph) -->
+  <div class="card shadow-sm mt-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="card-title mb-0">Recent Data</h5>
+        <div class="btn-group" role="group" aria-label="Toggle Views">
+          <button
+            id="btnViewTable"
+            class="btn btn-sm btn-outline-primary {% if server_table %}active{% endif %}"
+          >
+            Table
+          </button>
+          <button
+            id="btnViewGraph"
+            class="btn btn-sm btn-outline-primary {% if not server_table %}active{% endif %}"
+          >
+            Graph
+          </button>
+        </div>
+      </div>
+
+      <!-- SERVER-SIDE TABLE (last 20 calendar days, newest first) -->
+      <div
+        id="recentTableWrap"
+        class="{% if not server_table %}d-none{% endif %}"
+      >
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th class="text-nowrap">Date</th>
+                <th>Temp (°C)</th>
+                <th>Heart (bpm)</th>
+                <th>pH</th>
+                <th>Turb. (NTU)</th>
+                <th>Cond. (mS/cm)</th>
+                <th>Fat (%)</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if recent_records and recent_records|length %} {% for r in
+              recent_records %}
+              <tr data-id="{{ r.id }}">
+                <td class="text-nowrap">{{ r.timestamp }}</td>
+                <td
+                  class="{{ 'text-success fw-semibold' if r.ok_temperature else ('text-danger fw-semibold' if r.ok_temperature is not none else '') }}"
+                >
+                  {{ '%.2f'|format(r.temperature) if r.temperature is not none
+                  else '—' }}
+                </td>
+                <td
+                  class="{{ 'text-success fw-semibold' if r.ok_heart_rate else ('text-danger fw-semibold' if r.ok_heart_rate is not none else '') }}"
+                >
+                  {{ r.heart_rate if r.heart_rate is not none else '—' }}
+                </td>
+                <td
+                  class="{{ 'text-success fw-semibold' if r.ok_ph else ('text-danger fw-semibold' if r.ok_ph is not none else '') }}"
+                >
+                  {{ '%.2f'|format(r.ph) if r.ph is not none else '—' }}
+                </td>
+                <td
+                  class="{{ 'text-success fw-semibold' if r.ok_turbidity else ('text-danger fw-semibold' if r.ok_turbidity is not none else '') }}"
+                >
+                  {{ '%.2f'|format(r.turbidity) if r.turbidity is not none else
+                  '—' }}
+                </td>
+                <td
+                  class="{{ 'text-success fw-semibold' if r.ok_conductivity else ('text-danger fw-semibold' if r.ok_conductivity is not none else '') }}"
+                >
+                  {{ '%.2f'|format(r.conductivity) if r.conductivity is not none
+                  else '—' }}
+                </td>
+                <td
+                  class="{{ 'text-success fw-semibold' if r.ok_fat else ('text-danger fw-semibold' if r.ok_fat is not none else '') }}"
+                >
+                  {{ '%.2f'|format(r.fat) if r.fat is not none else '—' }}
+                </td>
+                <td class="text-end">
+                  <form
+                    method="post"
+                    action="{{ url_for('delete_record', cow_id=cow.id, record_id=r.id, next=url_for('cow_dashboard', cow_id=cow.id)) }}"
+                    onsubmit="return confirm('Delete this record?')"
+                  >
+                    <button class="btn btn-sm btn-outline-danger">
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %} {% else %}
+              <tr>
+                <td colspan="8" class="text-muted">No records yet.</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- GRAPH VIEW -->
+      <div id="recentGraphWrap" class="{% if server_table %}d-none{% endif %}">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Series">
+            <div id="legend" class="d-flex flex-wrap gap-2"></div>
+          </div>
+          <div class="ms-auto small text-muted">
+            Tip: <kbd>Alt</kbd>+click a legend item to
+            <strong>solo</strong> that series.
+          </div>
+        </div>
+
+        <svg
+          id="chart"
+          viewBox="0 0 900 360"
+          width="100%"
+          height="360"
+          preserveAspectRatio="none"
+          style="
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+          "
+        ></svg>
+
+        <div
+          id="tooltip"
+          style="
+            position: absolute;
+            pointer-events: none;
+            background: #111827;
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: none;
+          "
+        ></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- Config from backend ----------
+  const recordsUrl  = {{ records_json_url|tojson }};
+  const ideal       = {{ ideal|tojson }};
+  const serverTable = {{ (server_table|tojson if server_table is defined else 'false') }};
+
+  // ---------- Toggle handlers ----------
+  const btnTable = document.getElementById('btnViewTable');
+  const btnGraph = document.getElementById('btnViewGraph');
+  const wrapTable = document.getElementById('recentTableWrap');
+  const wrapGraph = document.getElementById('recentGraphWrap');
+
+  btnTable.addEventListener('click', () => {
+    btnTable.classList.add('active'); btnGraph.classList.remove('active');
+    wrapTable.classList.remove('d-none'); wrapGraph.classList.add('d-none');
+    const url = new URL(window.location.href);
+    url.searchParams.set('view','server');
+    history.replaceState(null, '', url.toString());
+  });
+  btnGraph.addEventListener('click', async () => {
+    btnGraph.classList.add('active'); btnTable.classList.remove('active');
+    wrapGraph.classList.remove('d-none'); wrapTable.classList.add('d-none');
+    const url = new URL(window.location.href);
+    url.searchParams.set('view','graph');
+    history.replaceState(null, '', url.toString());
+    if (!wrapGraph.dataset.rendered) {
+      const rows = await fetchData(recordsUrl);
+      renderChart(rows || []);
+      wrapGraph.dataset.rendered = '1';
+    }
+  });
+
+  // Auto-render graph if user is on the Graph tab by default
+  (async ()=> {
+    if (!serverTable) {
+      const rows = await fetchData(recordsUrl);
+      renderChart(rows || []);
+      wrapGraph.dataset.rendered = '1';
+    }
+  })();
+
+  // ---------- Fetch helper with NaN guard ----------
+  async function fetchData(url) {
+    const r = await fetch(url, { credentials: 'include' });
+    let raw = await r.text();
+    raw = raw.replace(/\bNaN\b/g,'null'); // guard for stray NaN
+    try {
+      const arr = JSON.parse(raw);
+      arr.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp)); // ASC
+      return arr;
+    } catch (e) {
+      console.error('JSON parse failed:', e, raw);
+      return [];
+    }
+  }
+
+  // ---------- Chart (pure SVG) ----------
+  function renderChart(rows) {
+    const svg = document.getElementById('chart');
+    const tip = document.getElementById('tooltip');
+    svg.innerHTML = '';
+
+    if (!rows.length) {
+      const msg = document.createElementNS('http://www.w3.org/2000/svg','text');
+      msg.setAttribute('x','450'); msg.setAttribute('y','180');
+      msg.setAttribute('text-anchor','middle'); msg.setAttribute('fill','#9ca3af');
+      msg.setAttribute('font-size','14'); msg.textContent = 'No data';
+      svg.appendChild(msg);
+      return;
+    }
+
+    // SERIES DEFINITIONS
+    const FIELDS = [
+      {key:'temperature',  label:'Temperature',  unit:'°C',    color:'#1f77b4'},
+      {key:'heart_rate',   label:'Heart Rate',   unit:'bpm',   color:'#ff7f0e'},
+      {key:'ph',           label:'pH',           unit:'',      color:'#2ca02c'},
+      {key:'turbidity',    label:'Turbidity',    unit:'NTU',   color:'#d62728'},
+      {key:'conductivity', label:'Conductivity', unit:'mS/cm', color:'#9467bd'},
+      {key:'fat_content',  label:'Fat',          unit:'%',     color:'#8c564b', alt:'predicted_fat'}
+    ];
+
+    // Layout
+    const W=900, H=360, L=60, R=24, T=18, B=50;
+    const innerW = W - L - R, innerH = H - T - B;
+
+    // X scale (time)
+    const times = rows.map(r => new Date(r.timestamp).getTime());
+    const tMin = Math.min(...times), tMax = Math.max(...times);
+    const x = t => L + ( (t - tMin) / (tMax - tMin || 1) ) * innerW;
+
+    // Build per-series values
+    const series = FIELDS.map(f => {
+      const vals = rows.map(r => {
+        let v = r[f.key];
+        if ((v===null || v===undefined) && f.alt) v = r[f.alt];
+        return (v===null || v===undefined) ? null : Number(v);
+      });
+      const good = vals.filter(v=>v!==null);
+      const vMin = good.length ? Math.min(...good) : 0;
+      const vMax = good.length ? Math.max(...good) : 1;
+      const pad = (vMax - vMin) * 0.08 || 1; // y padding
+      return {...f, vals, vMin: vMin - pad, vMax: vMax + pad};
+    });
+
+    // Current view state
+    const visible = new Map(FIELDS.map(f => [f.key, true]));
+    let soloKey = null;
+
+    // Axes group
+    const gAxes = document.createElementNS('http://www.w3.org/2000/svg','g');
+    svg.appendChild(gAxes);
+
+    // X axis with date/time ticks
+    drawXAxis(gAxes, x, tMin, tMax, W, H, L, T, B);
+
+    // Y scale builder for current visible/solo state
+    function computeYScale() {
+      let min = +Infinity, max = -Infinity;
+      const keys = FIELDS.map(f=>f.key).filter(k => (soloKey ? k===soloKey : visible.get(k)));
+      keys.forEach(k=>{
+        const s = series.find(s=>s.key===k);
+        if (!s) return;
+        min = Math.min(min, s.vMin);
+        max = Math.max(max, s.vMax);
+      });
+      if (!Number.isFinite(min) || !Number.isFinite(max)) { min=0; max=1; }
+      const y = v => T + innerH - ((v - min)/(max - min || 1))*innerH;
+      const unit = (soloKey ? (series.find(s=>s.key===soloKey)?.unit || '') : '');
+      return {y, min, max, unit};
+    }
+
+    // Legend controls
+    buildLegend(document.getElementById('legend'), FIELDS, series, visible, () => {
+      soloKey = null; // reset solo on normal toggle
+      redraw();
+    }, (key)=>{
+      // Alt-click: solo
+      soloKey = (soloKey === key) ? null : key;
+      visible.set(key, true); // keep it visible
+      redraw();
+    });
+
+    // Hover elements
+    const gHover = document.createElementNS('http://www.w3.org/2000/svg','g');
+    svg.appendChild(gHover);
+    const vline = line(L, T, L, H-B, '#9ca3af', '1');
+    vline.setAttribute('stroke-dasharray','3,3');
+    vline.style.display = 'none';
+    gHover.appendChild(vline);
+
+    function redraw() {
+      // remove previous
+      Array.from(svg.querySelectorAll('.series, .y-axis, .ideal-band, .hover-dot')).forEach(n=>n.remove());
+      const {y, min, max, unit} = computeYScale();
+      drawYAxis(svg, L, T, innerH, min, max, unit);
+
+      // ideal bands for visible/solo series
+      const keys = FIELDS.map(f=>f.key).filter(k => (soloKey ? k===soloKey : visible.get(k)));
+      keys.forEach(k => {
+        const s = series.find(s=>s.key===k);
+        if (!s) return;
+        const rng = ideal && ideal[k];
+        if (!rng || typeof rng.min !== 'number' || typeof rng.max !== 'number') return;
+        const y1 = y(rng.min), y2 = y(rng.max);
+        const band = rect(L, Math.min(y1,y2), innerW, Math.abs(y2-y1), '#d1fae5', 0.5);
+        band.classList.add('ideal-band');
+        svg.insertBefore(band, gAxes.nextSibling);
+      });
+
+      // draw each visible series
+      const keys2 = FIELDS.map(f=>f.key).filter(k => (soloKey ? k===soloKey : visible.get(k)));
+      keys2.forEach(k => {
+        const s = series.find(s=>s.key===k);
+        drawSeries(svg, s, x, y);
+      });
+    }
+    redraw();
+
+    // Hover tooltip
+    svg.addEventListener('mousemove', (ev)=>{
+      const pt = svg.createSVGPoint();
+      pt.x = ev.clientX; pt.y = ev.clientY;
+      const ctm = svg.getScreenCTM().inverse();
+      const loc = pt.matrixTransform(ctm);
+      const t = (loc.x - L) / (innerW||1) * (tMax - tMin) + tMin;
+      const idx = nearestIndex(times, t);
+      if (idx < 0 || idx >= times.length) {
+        tip.style.display = 'none'; vline.style.display = 'none'; return;
+      }
+      const cx = x(times[idx]);
+      vline.setAttribute('x1', cx); vline.setAttribute('x2', cx);
+      vline.style.display = 'inline';
+
+      const keys = FIELDS.map(f=>f.key).filter(k => (soloKey ? k===soloKey : visible.get(k)));
+      const lines = [ `<strong>${new Date(times[idx]).toLocaleString()}</strong>` ];
+      const {y} = computeYScale();
+
+      // remove old dots
+      Array.from(svg.querySelectorAll('.hover-dot')).forEach(n=>n.remove());
+
+      keys.forEach(k=>{
+        const s = series.find(s=>s.key===k);
+        const v = s.vals[idx];
+        if (v===null) return;
+        drawDot(svg, cx, y(v), s.color);
+        lines.push(`${s.label}: ${formatNumber(v)} ${s.unit}`);
+      });
+
+      tip.innerHTML = lines.join('<br>');
+      tip.style.display = 'block';
+      const rectSvg = svg.getBoundingClientRect();
+      const left = Math.min(rectSvg.right - 200, Math.max(rectSvg.left + 8, ev.clientX + 12));
+      const top  = Math.min(rectSvg.bottom - 80, Math.max(rectSvg.top + 8, ev.clientY + 12));
+      tip.style.left = `${left}px`;
+      tip.style.top  = `${top}px`;
+    });
+    svg.addEventListener('mouseleave', ()=>{
+      tip.style.display = 'none';
+      vline.style.display = 'none';
+      Array.from(svg.querySelectorAll('.hover-dot')).forEach(n=>n.remove());
+    });
+
+    // --- primitives & helpers ---
+    function drawSeries(svg, s, x, y) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('fill','none');
+      path.setAttribute('stroke', s.color);
+      path.setAttribute('stroke-width','2');
+      path.classList.add('series','series-'+s.key);
+
+      let d = '';
+      for (let i=0;i<rows.length;i++){
+        const v = s.vals[i];
+        if (v===null) continue;
+        const X = x(times[i]), Y = y(v);
+        d += (d ? ' L ' : 'M ') + X + ' ' + Y;
+      }
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    }
+    function drawDot(svg, x0, y0, color){
+      const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      dot.setAttribute('cx',x0); dot.setAttribute('cy',y0); dot.setAttribute('r','3');
+      dot.setAttribute('fill',color);
+      dot.classList.add('hover-dot');
+      svg.appendChild(dot);
+    }
+    function drawYAxis(svg, left, top, h, min, max, unit){
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.classList.add('y-axis');
+      svg.appendChild(g);
+      g.appendChild(line(left, top, left, top+h, '#e5e7eb', '1')); // axis
+      const ticks = niceTicks(min, max, 5);
+      const {y} = computeYScale();
+      ticks.forEach(v=>{
+        const yy = y(v);
+        g.appendChild(line(left, yy, left + (900-left-24), yy, '#f3f4f6', '1')); // grid
+        const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x', left-8); txt.setAttribute('y', yy);
+        txt.setAttribute('text-anchor','end'); txt.setAttribute('dominant-baseline','central');
+        txt.setAttribute('fill','#6b7280'); txt.setAttribute('font-size','11');
+        txt.textContent = formatNumber(v) + (unit ? ` ${unit}` : '');
+        g.appendChild(txt);
+      });
+    }
+    function drawXAxis(gAxes, x, tMin, tMax, W, H, L, T, B) {
+      gAxes.appendChild(line(L, H-B, W-24, H-B, '#e5e7eb', '1')); // axis
+      const ticks = timeTicks(tMin, tMax, 5);
+      ticks.forEach(ts => {
+        const xx = x(ts);
+        gAxes.appendChild(line(xx, T, xx, H-B, '#f3f4f6', '1')); // grid
+        const lab = document.createElementNS('http://www.w3.org/2000/svg','text');
+        lab.setAttribute('x', xx); lab.setAttribute('y', H-B+16);
+        lab.setAttribute('text-anchor','middle'); lab.setAttribute('fill','#6b7280'); lab.setAttribute('font-size','11');
+        const d = new Date(ts);
+        lab.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        gAxes.appendChild(lab);
+      });
+    }
+    function line(x1,y1,x2,y2,stroke,w){
+      const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+      ln.setAttribute('x1',x1); ln.setAttribute('y1',y1);
+      ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+      ln.setAttribute('stroke',stroke); ln.setAttribute('stroke-width',w);
+      return ln;
+    }
+    function rect(x,y,w,h,fill,op){
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      r.setAttribute('x',x); r.setAttribute('y',y);
+      r.setAttribute('width',w); r.setAttribute('height',h);
+      r.setAttribute('fill',fill); if (op!=null) r.setAttribute('opacity',op);
+      return r;
+    }
+    function niceTicks(min, max, count) {
+      if (min===max) { min-=1; max+=1; }
+      const span = max - min;
+      const step = Math.pow(10, Math.floor(Math.log10(span / count)));
+      const err = (count * step) / span;
+      const s = (err <= 0.15) ? step*10 : (err <= 0.35) ? step*5 : (err <= 0.75) ? step*2 : step;
+      const niceMin = Math.floor(min / s) * s;
+      const niceMax = Math.ceil(max / s) * s;
+      const ticks = [];
+      for (let v = niceMin; v <= niceMax + 1e-9; v += s) ticks.push(v);
+      return ticks;
+    }
+    function timeTicks(tMin, tMax, count) {
+      if (tMin===tMax) return [tMin];
+      const span = tMax - tMin;
+      const step = Math.round(span / count);
+      const ticks = [];
+      for (let i=0;i<=count;i++) ticks.push(tMin + i*step);
+      return ticks;
+    }
+    function nearestIndex(arr, target) {
+      let lo=0, hi=arr.length-1, best=0, bestd=Infinity;
+      while (lo<=hi) {
+        const mid=(lo+hi)>>1, d=Math.abs(arr[mid]-target);
+        if (d<bestd){best=mid;bestd=d;}
+        if (arr[mid]<target) lo=mid+1; else hi=mid-1;
+      }
+      return best;
+    }
+    function formatNumber(v) {
+      if (!isFinite(v)) return String(v);
+      if (Math.abs(v) >= 100 || Math.abs(v) < 0.01) return v.toFixed(2);
+      if (Math.abs(v) >= 10) return v.toFixed(2);
+      return v.toFixed(2);
+    }
+    function buildLegend(container, FIELDS, series, visible, onToggle, onSolo){
+      container.innerHTML = '';
+      FIELDS.forEach(f=>{
+        const btn = document.createElement('button');
+        btn.type='button';
+        btn.className='btn btn-outline-secondary';
+        btn.textContent=f.label;
+        btn.style.borderColor=f.color;
+        btn.style.color=f.color;
+        btn.dataset.key=f.key;
+        btn.onclick = (e)=>{
+          if (e.altKey) { onSolo(f.key); return; }
+          const cur = visible.get(f.key);
+          visible.set(f.key, !cur);
+          btn.classList.toggle('active', !cur);
+          onToggle();
+        };
+        container.appendChild(btn);
+      });
+    }
+  }
+</script>
+{% endblock %}

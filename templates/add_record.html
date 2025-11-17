@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block title %}Add Record{% endblock %}
+{% block content %}
+  <div class="container-fluid">
+    <h3>Add Record for {{ cow['tag_id'] }}</h3>
+
+    <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
+      <div>
+        <strong>Read from Device (2 steps):</strong>
+        <ol class="mb-0">
+          <li>Vitals: Temperature + Heart Rate</li>
+          <li>Milk: pH + Turbidity + Conductivity</li>
+        </ol>
+        <small class="text-muted">The server will merge both reads into a single record.</small>
+      </div>
+      <div class="ms-3">
+        <a href="{{ url_for('listen_vitals', cow_id=cow['id'], next=url_for('add_record', cow_id=cow['id'])) }}" class="btn btn-primary me-2">Read Vitals</a>
+        <a href="{{ url_for('listen_milk', cow_id=cow['id'], next=url_for('add_record', cow_id=cow['id'])) }}" class="btn btn-secondary">Read Milk</a>
+      </div>
+    </div>
+
+    <form method="POST" novalidate>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Temperature (°C)</label>
+          <input type="number" step="0.01" name="temperature" class="form-control" required placeholder="e.g., 38.2">
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">pH</label>
+          <input type="number" step="0.01" name="ph" class="form-control" required placeholder="e.g., 6.7">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label">Turbidity</label>
+          <input type="number" step="0.01" name="turbidity" class="form-control" required placeholder="e.g., 0.45">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label">Conductivity</label>
+          <input type="number" step="0.01" name="conductivity" class="form-control" required placeholder="e.g., 5.2">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label">Heart Rate (bpm)</label>
+          <input type="number" step="1" name="heart_rate" class="form-control" required placeholder="e.g., 72">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Fat % (optional)</label>
+        <input type="number" step="0.01" name="fat_content" class="form-control" placeholder="Leave blank to predict">
+        <div class="form-text">Leave blank to let the model predict fat % (if model available).</div>
+      </div>
+
+      <button type="submit" class="btn btn-success">Save Record (Manual)</button>
+      <a href="{{ url_for('cow_dashboard', cow_id=cow['id']) }}" class="btn btn-secondary ms-2">Cancel</a>
+    </form>
+  </div>
+{% endblock %}
