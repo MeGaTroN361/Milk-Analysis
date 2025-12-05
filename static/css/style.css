@@ -1,0 +1,67 @@
+/* ===== Global Styling ===== */
+
+body {
+    font-family: "Segoe UI", Arial, sans-serif;
+  }
+  
+  /* Card styling */
+  .main-card .card {
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Cow link styling */
+  .cow-link {
+    font-weight: bold;
+    color: #0d6efd;
+    text-decoration: none;
+  }
+  
+  .cow-link:hover {
+    text-decoration: underline;
+  }
+  
+  /* Status box animation */
+  #statusBox {
+    transition: all 0.3s ease-in-out;
+  }
+  
+  /* Buttons tweak */
+  button.btn, a.btn {
+    border-radius: 8px;
+    font-weight: 500;
+  }
+  
+  /* Input boxes */
+  input.form-control {
+    border-radius: 6px;
+  }
+  
+  /* Listening page */
+  #status {
+    font-size: 1.1rem;
+    padding: 15px;
+  }
+  
+  /* Cow table coloring */
+  .ok-value {
+    color: green;
+    font-weight: bold;
+  }
+  .bad-value {
+    color: red;
+    font-weight: bold;
+  }
+  
+  /* Legend row in dashboard */
+  .badge-legend {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  
